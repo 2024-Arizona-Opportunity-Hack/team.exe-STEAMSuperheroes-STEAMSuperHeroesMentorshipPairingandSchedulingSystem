@@ -1,178 +1,249 @@
+/**
+ * Import function triggers from their respective submodules:
+ *
+ * const {onCall} = require("firebase-functions/v2/https");
+ * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
+ *
+ * See a full list of supported triggers at https://firebase.google.com/docs/functions
+ */
+
+const {onRequest} = require("firebase-functions/v2/https");
+const logger = require("firebase-functions/logger");
+
+// Create and deploy your first functions
+// https://firebase.google.com/docs/functions/get-started
+
+exports.helloWorld = onRequest((request, response) => {
+  logger.info("Hello logs!", {structuredData: true});
+  response.send("Hello from Firebase!");
+});
+
+// the real stuff.
+
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const { setGlobalOptions } = require("firebase-functions/v2");
+const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
-const { Client } = require("@googlemaps/google-maps-services-js");
 
-require('dotenv').config();
+initializeApp();
 
-setGlobalOptions({ maxInstances: 10 });
+exports.simplifyUserData = onDocumentCreated("/unpaired/{docId}", async (event) => {
+  const db = getFirestore();
+  
+  // Since this is onDocumentCreated, we know the document exists
+  const newData = event.data.data();
+  const simplifiedData = {};
 
-const admin = require("firebase-admin");
-admin.initializeApp();
+  simplifiedData.academic_level = newData.academic_level.toLowerCase().replace(/ /g, '-');
+  simplifiedData.age_group = newData.age_group;
+  simplifiedData.background_in_steam = newData.background_in_steam.toLowerCase();
+  simplifiedData.cadence = newData.cadence;
+  simplifiedData.city = newData.city;
+  simplifiedData.email = newData.email;
+  simplifiedData.ethnicity = newData.ethnicity;
+
+    if (newData.ethnicity_preference) {
+      if (newData.ethnicity_preference.includes('ONLY')) simplifiedData.ethnicity_preference = 'only-similar';
+      else if (newData.ethnicity_preference.includes('availible')) simplifiedData.ethnicity_preference = 'prefer-similar';
+      else if (newData.ethnicity_preference.includes('NOT')) simplifiedData.ethnicity_preference = 'not-similar';
+      else if (newData.ethnicity_preference.includes('Do not have a preference')) simplifiedData.ethnicity_preference = 'no-preference';
+      else simplifiedData.ethnicity_preference = newData.ethnicity_preference;
+    }
+
+  simplifiedData.gender = newData.gender.toLowerCase().replace(/ /g, '-');
+  
+    if (newData.gender_preference) {
+      if (newData.gender_preference.includes('ONLY')) simplifiedData.gender_preference = 'only-similar';
+      else if (newData.gender_preference.includes('availible')) simplifiedData.gender_preference = 'prefer-similar';
+      else if (newData.gender_preference.includes('NOT')) simplifiedData.gender_preference = 'not-similar';
+      else if (newData.gender_preference.includes('Do not have a preference')) simplifiedData.gender_preference = 'no-preference';
+      else simplifiedData.gender_preference = newData.gender_preference;
+    }
+
+  simplifiedData.grade = parseInt(newData.grade, 10);
+  
+  if (newData.meeting_format_preference) {
+          if (newData.meeting_format_preference.toLowerCase().includes('hybrid')) simplifiedData.meeting_format_preference = 'hybrid';
+          else if (newData.meeting_format_preference.toLowerCase().includes('in person')) simplifiedData.meeting_format_preference = 'in-person';
+          else if (newData.meeting_format_preference.toLowerCase().includes('web')) simplifiedData.meeting_format_preference = 'online';
+          else simplifiedData.meeting_format_preference = newData.meeting_format_preference.toLowerCase();
+    }
+  
+  simplifiedData.name = newData.name;
+  simplifiedData.phone_number = formatPhoneNumber(newData.phone_number);
+  simplifiedData.role = newData.role.toLowerCase().includes('mentee') ? 'mentee' : 'mentor';
+  simplifiedData.schedule_monday = newData.schedule_monday;
+  simplifiedData.schedule_thursday = newData.schedule_thursday;
+  simplifiedData.session_type = newData.session_type.split(', ').map(type => type.toLowerCase().replace(' ', '-'));
+  simplifiedData.state = newData.state.split(' : ')[0];
+  simplifiedData.timestamp = newData.timestamp;
+
+  try {
+    await event.data.ref.set(simplifiedData, { merge: true });
+    console.log("Document successfully updated");
+  } catch (error) {
+    console.error("Error updating document: ", error);
+  }
+});
+
+function formatPhoneNumber(phoneNumberString) {
+  const cleaned = ('' + phoneNumberString).replace(/\D/g, '');
+  const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
+  if (match) {
+    return '(' + match[1] + ') ' + match[2] + '-' + match[3];
+  }
+  return phoneNumberString;
+}
+
+/// MATCHING
 
 const db = getFirestore();
-const mapsClient = new Client({});
-
-const functions = require('firebase-functions');
-const mapsApiKey = functions.config().googlemaps.key;
-
-// Haversine formula to calculate distance between two points
-function getDistanceFromLatLonInMiles(lat1, lon1, lat2, lon2) {
-  const R = 3959; // Radius of the earth in miles
-  const dLat = deg2rad(lat2 - lat1);
-  const dLon = deg2rad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const d = R * c; // Distance in miles
-  return d;
-}
-
-function deg2rad(deg) {
-  return deg * (Math.PI / 180);
-}
-
-async function getCoordinates(address) {
-  try {
-    const response = await mapsClient.geocode({
-      params: {
-        address: address,
-        key: process.env.GOOGLE_MAPS_API_KEY || functions.config().googlemaps.key
-      }
-    });
-    if (response.data.results && response.data.results.length > 0) {
-      const { lat, lng } = response.data.results[0].geometry.location;
-      return { latitude: lat, longitude: lng };
-    }
-    throw new Error('No results found');
-  } catch (error) {
-    console.error('Error getting coordinates:', error);
-    return null;
-  }
-}
 
 function calculateScheduleCompatibility(schedule1, schedule2) {
   const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-  const timeSlots = [
-    "7am to 9am", "9am to 11am", "11am to 1pm", "1pm to 3pm",
-    "3pm to 5pm", "5pm to 7pm", "7pm to 9pm"
-  ];
-  
   let compatibleSlots = 0;
   let totalSlots = 0;
 
   for (const day of days) {
-    for (const slot of timeSlots) {
-      if (schedule1[day].includes(slot) && schedule2[day].includes(slot)) {
-        compatibleSlots++;
-      }
-      if (schedule1[day].includes(slot) || schedule2[day].includes(slot)) {
-        totalSlots++;
-      }
+    const dayKey = `schedule_${day}`;
+    if (schedule1[dayKey] && schedule2[dayKey]) {
+      compatibleSlots++;
+    }
+    if (schedule1[dayKey] || schedule2[dayKey]) {
+      totalSlots++;
     }
   }
 
-  return compatibleSlots / totalSlots;
+  const compatibility = totalSlots > 0 ? compatibleSlots / totalSlots : 0;
+  return compatibility;
 }
 
-exports.pairUsers = onDocumentCreated("unpaired/{docId}", async (event) => {
+exports.pairMentorMentee = onDocumentCreated("unpaired/{docId}", async (event) => {
+// Since this is onDocumentCreated, we know the document exists
+const newData = event.data.data();
+const simplifiedData = {};
+
+simplifiedData.academic_level = newData.academic_level.toLowerCase().replace(/ /g, '-');
+simplifiedData.age_group = newData.age_group;
+simplifiedData.background_in_steam = newData.background_in_steam.toLowerCase();
+simplifiedData.cadence = newData.cadence;
+simplifiedData.city = newData.city;
+simplifiedData.email = newData.email;
+simplifiedData.ethnicity = newData.ethnicity;
+
+  if (newData.ethnicity_preference) {
+    if (newData.ethnicity_preference.includes('ONLY')) simplifiedData.ethnicity_preference = 'only-similar';
+    else if (newData.ethnicity_preference.includes('availible')) simplifiedData.ethnicity_preference = 'prefer-similar';
+    else if (newData.ethnicity_preference.includes('NOT')) simplifiedData.ethnicity_preference = 'not-similar';
+    else if (newData.ethnicity_preference.includes('Do not have a preference')) simplifiedData.ethnicity_preference = 'no-preference';
+    else simplifiedData.ethnicity_preference = newData.ethnicity_preference;
+  }
+
+simplifiedData.gender = newData.gender.toLowerCase().replace(/ /g, '-');
+
+  if (newData.gender_preference) {
+    if (newData.gender_preference.includes('ONLY')) simplifiedData.gender_preference = 'only-similar';
+    else if (newData.gender_preference.includes('availible')) simplifiedData.gender_preference = 'prefer-similar';
+    else if (newData.gender_preference.includes('NOT')) simplifiedData.gender_preference = 'not-similar';
+    else if (newData.gender_preference.includes('Do not have a preference')) simplifiedData.gender_preference = 'no-preference';
+    else simplifiedData.gender_preference = newData.gender_preference;
+  }
+
+simplifiedData.grade = parseInt(newData.grade, 10);
+
+if (newData.meeting_format_preference) {
+        if (newData.meeting_format_preference.toLowerCase().includes('hybrid')) simplifiedData.meeting_format_preference = 'hybrid';
+        else if (newData.meeting_format_preference.toLowerCase().includes('in person')) simplifiedData.meeting_format_preference = 'in-person';
+        else if (newData.meeting_format_preference.toLowerCase().includes('web')) simplifiedData.meeting_format_preference = 'online';
+        else simplifiedData.meeting_format_preference = newData.meeting_format_preference.toLowerCase();
+  }
+
+simplifiedData.name = newData.name;
+simplifiedData.phone_number = formatPhoneNumber(newData.phone_number);
+simplifiedData.role = newData.role.toLowerCase().includes('mentee') ? 'mentee' : 'mentor';
+simplifiedData.schedule_monday = newData.schedule_monday;
+simplifiedData.schedule_thursday = newData.schedule_thursday;
+simplifiedData.session_type = newData.session_type.split(', ').map(type => type.toLowerCase().replace(' ', '-'));
+simplifiedData.state = newData.state.split(' : ')[0];
+simplifiedData.timestamp = newData.timestamp;
+
+try {
+  await event.data.ref.set(simplifiedData, { merge: true });
+  console.log("Document successfully updated");
+} catch (error) {
+  console.error("Error updating document: ", error);
+}
+
+// SECONDARY
   const newUser = event.data.data();
   const newUserId = event.data.id;
 
-  if (!newUser || !newUser.role || !newUser.gender || !newUser.mentorType || 
-      !newUser.ethnicity || !newUser.sexualOrientation || !newUser.age ||
-      !newUser.street || !newUser.city || !newUser.state || !newUser.zipcode ||
-      !newUser.genderPreference || !newUser.ethnicityPreference || !newUser.sexualOrientationPreference ||
-      !newUser.schedule || !newUser.cadence) {
-    console.log("Invalid document data");
-    return null;
-  }
+  logger.info(`New user added to unpaired collection`, { userId: newUserId, role: newUser.role, data: newUser });
 
-  // Get coordinates for the new user
-  const newUserAddress = `${newUser.street}, ${newUser.city}, ${newUser.state} ${newUser.zipcode}`;
-  const newUserCoords = await getCoordinates(newUserAddress);
-  if (!newUserCoords) {
-    console.log("Could not get coordinates for new user");
+  if (!newUser || !newUser.role || !newUser.gender || !newUser.ethnicity || 
+      !newUser.age_group || !newUser.city || !newUser.state || !newUser.cadence) {
+    logger.warn("Invalid document data", { userId: newUserId, data: newUser });
     return null;
   }
 
   const oppositeRole = newUser.role === "mentor" ? "mentee" : "mentor";
 
+  // Only filter by opposite role in the initial query
   let query = db.collection("unpaired").where("role", "==", oppositeRole);
 
-  // Apply filters based on preferences
-  if (newUser.genderPreference !== "doesn't matter") {
-    query = query.where("gender", "==", newUser.gender);
-  }
-  if (newUser.ethnicityPreference !== "doesn't matter") {
-    query = query.where("ethnicity", "==", newUser.ethnicity);
-  }
-  if (newUser.sexualOrientationPreference !== "doesn't matter") {
-    query = query.where("sexualOrientation", "==", newUser.sexualOrientation);
-  }
-
-  query = query.where("mentorType", "==", newUser.mentorType)
-               .where("cadence", "==", newUser.cadence);
+  logger.info(`Building initial query for opposite role`, { oppositeRole });
 
   const querySnapshot = await query.get();
-
-  if (querySnapshot.empty) {
-    console.log("No potential matches found");
-    return null;
-  }
+  logger.info(`Initial query returned ${querySnapshot.size} potential matches`);
 
   let matchedUser = null;
   let matchedUserId = null;
 
   for (const doc of querySnapshot.docs) {
     const potentialMatch = doc.data();
+    logger.info(`Evaluating potential match`, { matchId: doc.id, matchRole: potentialMatch.role, matchData: potentialMatch });
 
-    // Check if preferences match
-    if ((newUser.genderPreference === "doesn't matter" || potentialMatch.genderPreference === "doesn't matter" || newUser.gender === potentialMatch.gender) &&
-        (newUser.ethnicityPreference === "doesn't matter" || potentialMatch.ethnicityPreference === "doesn't matter" || newUser.ethnicity === potentialMatch.ethnicity) &&
-        (newUser.sexualOrientationPreference === "doesn't matter" || potentialMatch.sexualOrientationPreference === "doesn't matter" || newUser.sexualOrientation === potentialMatch.sexualOrientation)) {
+    const criteriaResults = {
+      role: true, // Already filtered in query
+      cadence: newUser.cadence == potentialMatch.cadence,
+      gender: newUser.gender_preference != "only-similar" || newUser.gender == potentialMatch.gender,
+      ethnicity: newUser.ethnicity_preference != "only-similar" || newUser.ethnicity == potentialMatch.ethnicity,
+      scheduleCompatibility: calculateScheduleCompatibility(newUser, potentialMatch) >= 0.5
+    };
 
-      // Check age criteria
-      const ageDifference = Math.abs(newUser.age - potentialMatch.age);
-      const minAgeDifference = newUser.mentorType === "homework_help" ? 2 : 10;
-      
-      if ((newUser.role === "mentor" && newUser.age - potentialMatch.age >= minAgeDifference) ||
-          (newUser.role === "mentee" && potentialMatch.age - newUser.age >= minAgeDifference)) {
-        
-        // Check schedule compatibility
-        const scheduleCompatibility = calculateScheduleCompatibility(newUser.schedule, potentialMatch.schedule);
-        
-        if (scheduleCompatibility >= 0.8) {
-          // Check distance criteria
-          const matchAddress = `${potentialMatch.street}, ${potentialMatch.city}, ${potentialMatch.state} ${potentialMatch.zipcode}`;
-          const matchCoords = await getCoordinates(matchAddress);
-          if (matchCoords) {
-            const distance = getDistanceFromLatLonInMiles(
-              newUserCoords.latitude, newUserCoords.longitude,
-              matchCoords.latitude, matchCoords.longitude
-            );
-            
-            if (distance <= 60) {
-              matchedUser = potentialMatch;
-              matchedUserId = doc.id;
-              break;
-            }
-          }
-        }
-      }
+    logger.info(`Matching criteria results`, { 
+      matchId: doc.id, 
+      criteriaResults: criteriaResults,
+      userCadence: newUser.cadence,
+      matchCadence: potentialMatch.cadence,
+      userGender: newUser.gender,
+      matchGender: potentialMatch.gender,
+      userGenderPreference: newUser.gender_preference,
+      userEthnicity: newUser.ethnicity,
+      matchEthnicity: potentialMatch.ethnicity,
+      userEthnicityPreference: newUser.ethnicity_preference,
+      scheduleCompatibility: criteriaResults.scheduleCompatibility
+    });
+
+    if (Object.values(criteriaResults).every(result => result === true)) {
+      matchedUser = potentialMatch;
+      matchedUserId = doc.id;
+      logger.info(`All criteria passed. Match found`, { matchedUserId });
+      break;
+    } else {
+      logger.info(`Match criteria not met`, { matchId: doc.id, failedCriteria: Object.keys(criteriaResults).filter(key => !criteriaResults[key]) });
     }
   }
 
   if (!matchedUser) {
-    console.log("No matching user found meeting all criteria");
+    logger.warn("No matching user found meeting all criteria", { userId: newUserId });
     return null;
   }
 
+  logger.info(`Proceeding to pair users`, { newUserId, matchedUserId });
+
   const batch = db.batch();
 
-  // Copy users to paired collection
+  // Move users to paired collection
   batch.set(db.collection("paired").doc(newUserId), newUser);
   batch.set(db.collection("paired").doc(matchedUserId), matchedUser);
 
@@ -181,14 +252,20 @@ exports.pairUsers = onDocumentCreated("unpaired/{docId}", async (event) => {
     mentorId: newUser.role === "mentor" ? newUserId : matchedUserId,
     menteeId: newUser.role === "mentee" ? newUserId : matchedUserId,
   };
+  
   batch.set(db.collection("pairs").doc(), pairData);
 
-  // Delete users from unpaired collection
+  // Remove from unpaired collection
   batch.delete(db.collection("unpaired").doc(newUserId));
   batch.delete(db.collection("unpaired").doc(matchedUserId));
 
-  await batch.commit();
+  try {
+    await batch.commit();
+    logger.info(`Successfully paired users`, { newUserId, matchedUserId });
+  } catch (error) {
+    logger.error(`Error committing batch`, { error: error.message, newUserId, matchedUserId });
+    return null;
+  }
 
-  console.log(`Paired users: ${newUserId} and ${matchedUserId}`);
   return null;
 });
