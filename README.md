@@ -11,33 +11,33 @@
 team .exe (on Slack)
 
 ## Team "team.exe"
-- [Team Member 1](GitHub profile link)
-- [Team Member 2](GitHub profile link)
-- [Team Member 3](GitHub profile link)
-<!-- Add all team members -->
+- [M.T. Wilson](https://github.com/mtdubba)
+- [Rufat Babayev(Alex)](https://github.com/alexandsomeadventures)
+- [Phillip Campbell](https://github.com/PhilCamp630)
+- [Harshit Kumar](https://github.com/QuantumDudee)
+- Amelia Green 
 
 ## Project Overview
-Brief description of your project and its goals.
+Our project for Steam Superheroes focuses on automating processes, scaling operations, and building a matching system for mentors and mentees, with a fun, kid-focused twist around topics like STEAM, comics, and programming. We developed a sleek front end using Streamlit to display insights via Geckoboard, including user sign-ups, mentor reviews, generative AI feedback summaries, recent matches, and student progress metrics. Firebase serves as the database, with cloud functions enabling instant matching and data updates. Zapier and Twilio automate emails, SMS notifications, and scheduling through Gmail and Zoom, streamlining workflows and reducing manual tasks. By leveraging non-profit grants from providers like Google Cloud and Twilio, the solution stays cost-effective and scalable while providing seamless functionality for future growth.
 
 ## Tech Stack
-- Frontend: 
-- Backend: 
-- Database: 
-- APIs: 
-<!-- Add/modify as needed -->
+- Frontend: Geckoboard, Streamlit
+- Backend: Python, JavaScript, Twilio, Zapier
+- Database: Firebase, Google Spreadsheets
+- APIs: Google Geocoding API
 
 
 ## Getting Started
-Instructions on how to set up and run your project locally.
+In IDE(like VS Code Editor), open new terminal and type:
+```git clone https://github.com/2024-Arizona-Opportunity-Hack/team.exe-STEAMSuperheroes-STEAMSuperHeroesMentorshipPairingandSchedulingSystem.git```
+```cd 2024-Arizona-Opportunity-Hack/team.exe-STEAMSuperheroes-STEAMSuperHeroesMentorshipPairingandSchedulingSystem```
+After changing to correct directory, install necessary dependencies by typing:
+```npm install```
+IMPORTANT! You might need to set up your own firebase project to run this locally and then configure your own firestore with cloud functions included. You might also needed google
+geocoding API key for files to work. For more help about Firebase and Google Geocoding API, refer [here](https://firebase.google.com/) and [here](https://developers.google.com/maps/documentation/geocoding/start).
 
-```bash
-# Example commands
-git clone [your-repo-link]
-cd [your-repo-name]
-npm install
-npm start
-```
-
+Run using:
+```npm run dev```
 
 ## Your next steps
 1. ✅ Add everyone on your team to your GitHub repo like [this video posted in our Slack channel](https://opportunity-hack.slack.com/archives/C1Q6YHXQU/p1605657678139600)
