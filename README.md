@@ -8,7 +8,7 @@
 - [Problem Statement](https://ohack.dev/project/KNcxMWT2sfZWxGvcyYe3)
 
 ## Creator
-@Amelia Green (on Slack)
+team .exe (on Slack)
 
 ## Team "team.exe"
 - [Team Member 1](GitHub profile link)
