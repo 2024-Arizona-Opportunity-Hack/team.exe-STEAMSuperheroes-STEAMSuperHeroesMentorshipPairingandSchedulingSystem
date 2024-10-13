@@ -20,15 +20,16 @@ async function matchMentorsAndMentees() {
     const mentees = menteeRef.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     mentees.forEach(async mentee => {
         mentors.forEach(async mentor => {
-            if (mentor.gender === mentee.preferGender && mentor.ethnicity === mentee.preferRace) {
-
-                const ageDifference = Math.abs(mentor.age - mentee.age); 
+            const ageDifference = Math.abs(mentor.age - mentee.age);
+            if (mentor.gender === mentee.preferGender && mentor.ethnicity === mentee.preferRace
+                && ageDifference >= 10 && mentor.sessionType === mentee.sessionType) 
+            {
                 const distance = await convertGPS(mentor.address, mentee.address);
-                console.log(`distance: ${distance}`);
-                if (ageDifference >= 10 && distance <= 60){
+                if ( distance <= 60){
                     console.log(`Matched ${mentor.firstName} with ${mentee.firstName}`);
                     console.log(`distance: ${distance}`);   
                 }
+                
             }
 
         });
