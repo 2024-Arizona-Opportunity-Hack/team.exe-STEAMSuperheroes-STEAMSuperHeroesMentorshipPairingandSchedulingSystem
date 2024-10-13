@@ -22,22 +22,51 @@ const calculateDistance = (loc1, loc2) => {
 // Function to find common available slots
 const findCommonAvailability = (mentorAvailability, menteeAvailability) => {
     const commonSlots = [];
-    mentorAvailability.forEach(mentorDay => {
-        const menteeDay = menteeAvailability.find(m => m.day === mentorDay.day);
-        if (menteeDay) {
-            mentorDay.slots.forEach(mentorSlot => {
-                menteeDay.slots.forEach(menteeSlot => {
-                    if (mentorSlot === menteeSlot) {
+    
+    // Iterate through each day in mentee's availability
+    for (const day in menteeAvailability) {
+        if (mentorAvailability[day]) { // Check if mentor has availability for that day
+            menteeAvailability[day].forEach(menteeSlot => {
+                mentorAvailability[day].forEach(mentorSlot => {
+                    if (menteeSlot === mentorSlot) {
                         commonSlots.push({
-                            day: mentorDay.day,
-                            slot: mentorSlot,
+                            day: day,
+                            slot: menteeSlot, // Same slot for both
                         });
                     }
                 });
             });
         }
-    });
+    }
+
     return commonSlots.slice(0, 6); // Limit to 6 potential meeting times
+};
+
+// Function to generate future appointment dates
+const generateFutureAppointments = (commonSlots) => {
+    const futureAppointments = [];
+    const today = new Date();
+    const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    commonSlots.forEach(slot => {
+        let dayIndex = daysOfWeek.indexOf(slot.day);
+        let nextAvailableDate = new Date(today);
+        
+        // Find the next occurrence of the available day
+        while (nextAvailableDate.getDay() !== dayIndex) {
+            nextAvailableDate.setDate(nextAvailableDate.getDate() + 1);
+        }
+
+        // Combine date and time slot
+        const appointmentDateTime = new Date(`${nextAvailableDate.toISOString().split('T')[0]}T${slot.slot}:00`);
+        
+        if (appointmentDateTime > today) {
+            futureAppointments.push(appointmentDateTime);
+        }
+    });
+
+    // Limit to the next 6 appointments
+    return futureAppointments.slice(0, 6);
 };
 
 // Cloud Function to find matches based on criteria
@@ -46,32 +75,29 @@ exports.findMatches = functions.https.onRequest(async (req, res) => {
 
     try {
         // Fetch mentee data
-        const menteeSnapshot = await admin.database().ref(`/mentees/${menteeId}`).once('value');
-        const mentee = menteeSnapshot.val();
+        const menteeSnapshot = await admin.firestore().collection('mentees').doc(menteeId).get();
+        const mentee = menteeSnapshot.data();
 
         if (!mentee) {
             return res.status(404).send('Mentee not found');
         }
 
         // Fetch all mentors
-        const mentorsSnapshot = await admin.database().ref('/mentors').once('value');
-        const mentors = mentorsSnapshot.val();
-
+        const mentorsSnapshot = await admin.firestore().collection('mentors').get();
         const matches = [];
 
-        // Iterate through mentors and apply matching logic
-        for (const mentorId in mentors) {
-            const mentor = mentors[mentorId];
+        mentorsSnapshot.forEach(mentorDoc => {
+            const mentor = mentorDoc.data();
 
             // Check location distance
             const distance = calculateDistance(mentee.location, mentor.location);
-            if (distance > 60) continue; // Skip if not within 60 miles
+            if (distance > 60) return; // Skip if not within 60 miles
 
             // Check age difference
             const ageDifference = Math.abs(mentee.age - mentor.age);
             const isHomeworkHelp = mentor.mentorType === "Homework Help";
             if ((isHomeworkHelp && ageDifference > 2) || (!isHomeworkHelp && ageDifference < 10)) {
-                continue; // Skip if age difference is not suitable
+                return; // Skip if age difference is not suitable
             }
 
             // Check ethnicity, gender, and sexuality matches
@@ -83,15 +109,17 @@ exports.findMatches = functions.https.onRequest(async (req, res) => {
             if (matchEthnicity && matchGender && matchSexuality) {
                 const commonSlots = findCommonAvailability(mentor.availability, mentee.availability);
                 if (commonSlots.length > 0) {
+                    const futureAppointments = generateFutureAppointments(commonSlots);
                     matches.push({
-                        mentorId,
+                        mentorId: mentorDoc.id,
                         mentorName: mentor.name,
                         distance,
                         availableSlots: commonSlots,
+                        futureAppointments // Add future appointments
                     });
                 }
             }
-        }
+        });
 
         // Sort matches by distance (optional)
         matches.sort((a, b) => a.distance - b.distance);
