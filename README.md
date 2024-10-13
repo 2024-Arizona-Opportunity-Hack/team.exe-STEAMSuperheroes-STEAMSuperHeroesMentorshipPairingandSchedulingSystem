@@ -15,7 +15,7 @@ team .exe (on Slack)
 - [Rufat Babayev(Alex)](https://github.com/alexandsomeadventures)
 - [Phillip Campbell](https://github.com/PhilCamp630)
 - [Harshit Kumar](https://github.com/QuantumDudee)
-- Amelia Green 
+- [Amelia Green](https://github.com/ameliamkg)
 
 ## Project Overview
 Our project for Steam Superheroes focuses on automating processes, scaling operations, and building a matching system for mentors and mentees, with a fun, kid-focused twist around topics like STEAM, comics, and programming. We developed a sleek front end using Streamlit to display insights via Geckoboard, including user sign-ups, mentor reviews, generative AI feedback summaries, recent matches, and student progress metrics. Firebase serves as the database, with cloud functions enabling instant matching and data updates. Zapier and Twilio automate emails, SMS notifications, and scheduling through Gmail and Zoom, streamlining workflows and reducing manual tasks. By leveraging non-profit grants from providers like Google Cloud and Twilio, the solution stays cost-effective and scalable while providing seamless functionality for future growth.
