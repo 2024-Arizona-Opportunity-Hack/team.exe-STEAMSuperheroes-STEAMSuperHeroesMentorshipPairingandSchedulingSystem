@@ -1,7 +1,9 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from 'firebase/firestore';
+import dotenv from 'dotenv';
+dotenv.config();
 const firebaseConfig = {
-  apiKey: "AIzaSyD0R8Lu3eMTWOMmCyXa6m6dRGlY4tjh3Mc",
+  apiKey: process.env.FIREBASE_KEY,
   authDomain: "fall-hackathon-project.firebaseapp.com",
   projectId: "fall-hackathon-project",
   storageBucket: "fall-hackathon-project.appspot.com",

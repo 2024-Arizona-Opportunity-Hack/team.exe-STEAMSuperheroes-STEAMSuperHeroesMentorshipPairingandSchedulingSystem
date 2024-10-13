@@ -9,7 +9,7 @@ import {
     deleteDoc,
     getDoc
   } from 'firebase/firestore'
-import { Console } from 'console';
+
 
 async function getCoordinates(address) {
     const apiKey = 'API KEY'; // Replace with your API key
